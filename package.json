@@ -1,0 +1,43 @@
+{
+  "name": "core-flow-ui",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Core Flow 控制台",
+  "author": {
+    "name": "aixsyr",
+    "email": "aixsyr@gmail.com"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "lint": "oxlint",
+    "format": "prettier --write --bracket-same-line \"src/**/*.{vue,ts,js,html,css,json}\" \"*.{ts,js,json,jsonc,html,md}\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@unhead/vue": "^2.1.2",
+    "@vueuse/core": "^15.0.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.27",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@iconify-json/mdi": "^1.2.3",
+    "@iconify-json/svg-spinners": "^1.2.4",
+    "@iconify/utils": "^3.1.7",
+    "@types/node": "^24.10.9",
+    "@unocss/reset": "^66.11.0",
+    "@vitejs/plugin-vue": "^6.0.3",
+    "@vue/tsconfig": "^0.7.0",
+    "autoprefixer": "^10.4.23",
+    "oxlint": "^1.89.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.8.3",
+    "unocss": "^66.11.0",
+    "unplugin-auto-import": "^20.3.0",
+    "unplugin-vue-components": "^29.2.0",
+    "vite": "^7.3.1",
+    "vite-plugin-vue-devtools": "^8.1.1",
+    "vue-tsc": "^3.2.4"
+  }
+}

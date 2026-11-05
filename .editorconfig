@@ -1,0 +1,36 @@
+# 声明当前文件为顶层根配置文件，禁止编辑器向上级父目录递归查找其他 .editorconfig
+root = true
+
+# ==============================================================================
+# 1. 脚本与组件源文件 (JS, TS, Vue 等)
+# ==============================================================================
+[*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,vue}]
+# 文件字符编码采用标准 UTF-8（无 BOM）
+charset = utf-8
+# 缩进尺寸：2 个字符宽度
+indent_size = 2
+# 缩进方式：使用空格（space）代替制表符（tab）
+indent_style = space
+# 保存时自动在文件末尾插入一个换行符（符合 POSIX 规范，杜绝 Git diff 报 \ No newline at end of file）
+insert_final_newline = true
+# 保存时自动裁切清理行末多余的无效空白字符
+trim_trailing_whitespace = true
+
+# ==============================================================================
+# 2. 页面结构与数据配置文件 (HTML, JSON, YAML 等)
+# ==============================================================================
+[*.{html,json,jsonc,yaml,yml}]
+charset = utf-8
+indent_size = 2
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# ==============================================================================
+# 3. Markdown 说明文档
+# ==============================================================================
+[*.md]
+charset = utf-8
+insert_final_newline = true
+# 禁用行末空格裁切（Markdown 语法中，行尾保留两个空格表示文本硬换行 <br>）
+trim_trailing_whitespace = false
