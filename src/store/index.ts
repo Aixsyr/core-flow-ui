@@ -5,6 +5,7 @@ import type {
   UIEndpointGroup,
   UIPolicy,
   UIFilter,
+  UIMirrorHost,
   EndpointKind,
   FilterKind,
 } from "@/types/config";
@@ -15,6 +16,10 @@ import {
   toBackendSettings,
   generateUid,
 } from "@/utils/serializer";
+import {
+  deriveMirrorGroupName,
+  getAllEndpointOptions,
+} from "@/utils/derived";
 import { validateSettings } from "@/utils/validator";
 
 export const useStore = defineStore("core", () => {
@@ -28,14 +33,15 @@ export const useStore = defineStore("core", () => {
   const isLoading = ref(false);
   const errorMessage = ref("");
 
-  // 主工作区当前激活的 Tab: endpoints | policies | filters | fallback | preview
+  // 主工作区当前激活的 Tab: hosts | endpoints | policies | filters | fallback | preview
   const activeTab = ref<
-    "endpoints" | "policies" | "filters" | "fallback" | "preview"
+    "hosts" | "endpoints" | "policies" | "filters" | "fallback" | "preview"
   >("endpoints");
 
-  // 前端状态树（fallback 固化为合法对象，彻底杜绝局部重复防御判空）
+  // 前端状态树（fallback / mirrors 固化为合法结构，彻底杜绝局部重复防御判空）
   const uiConfig = ref<UISettings>({
     defaultTarget: "DIRECT",
+    mirrors: [],
     fallback: {
       enabled: false,
       timeoutMs: 3500,
@@ -45,6 +51,11 @@ export const useStore = defineStore("core", () => {
     policies: [],
     filters: [],
   });
+
+  // 全局可用节点组清单（含原始节点组 + 由 edge 组与 mirrors 派生出的镜像组）
+  const allEndpointOptions = computed(() =>
+    getAllEndpointOptions(uiConfig.value.endpoints, uiConfig.value.mirrors),
+  );
 
   // 全局可用出站目标 (DIRECT, REJECT 及所有策略组名称)
   const availableTargets = computed(() => {
@@ -239,21 +250,109 @@ export const useStore = defineStore("core", () => {
   // 名称联动与防悬空引用更新
   // ===========================================================================
 
+  function pruneStaleEndpointRefs() {
+    const validKeys = new Set(
+      allEndpointOptions.value.map((opt) => `endpoint:${opt.name}`),
+    );
+    for (const p of uiConfig.value.policies) {
+      if (Array.isArray(p.order)) {
+        p.order = p.order.filter(
+          (key) => !key.startsWith("endpoint:") || validKeys.has(key),
+        );
+      }
+    }
+  }
+
   function renameEndpointGroup(group: UIEndpointGroup, newName: string) {
     const oldName = group.name;
     const clean = newName.trim();
     if (!clean || clean === oldName) return;
 
     group.name = clean;
-    // 联动策略组 order 中的 endpoint:<oldName>
-    for (const p of uiConfig.value.policies) {
-      if (Array.isArray(p.order)) {
-        p.order = p.order.map((key) =>
-          key === `endpoint:${oldName}` ? `endpoint:${clean}` : key,
+    const renameMap = new Map<string, string>([
+      [`endpoint:${oldName}`, `endpoint:${clean}`],
+    ]);
+    if (group.kind === "edge") {
+      for (const mirror of uiConfig.value.mirrors) {
+        const mName = mirror.name.trim();
+        if (!mName) continue;
+        renameMap.set(
+          `endpoint:${deriveMirrorGroupName(oldName, mName)}`,
+          `endpoint:${deriveMirrorGroupName(clean, mName)}`,
         );
       }
     }
+    for (const p of uiConfig.value.policies) {
+      if (Array.isArray(p.order)) {
+        p.order = p.order.map((key) => renameMap.get(key) ?? key);
+      }
+    }
     markDirty();
+  }
+
+  function changeEndpointKind(group: UIEndpointGroup, kind: EndpointKind) {
+    group.kind = kind;
+    if (kind === "edge") {
+      group.parent = "";
+    } else if (!group.parent) {
+      group.parent = uiConfig.value.policies[0]?.name || "";
+    }
+    pruneStaleEndpointRefs();
+    markDirty();
+  }
+
+  function renameMirrorHost(mirror: UIMirrorHost, newName: string) {
+    const oldName = mirror.name.trim();
+    const clean = newName.trim();
+    if (!clean || clean === oldName) return;
+
+    mirror.name = clean;
+    if (oldName) {
+      const renameMap = new Map<string, string>();
+      for (const ep of uiConfig.value.endpoints) {
+        if (ep.kind !== "edge" || !ep.name.trim()) continue;
+        const epName = ep.name.trim();
+        renameMap.set(
+          `endpoint:${deriveMirrorGroupName(epName, oldName)}`,
+          `endpoint:${deriveMirrorGroupName(epName, clean)}`,
+        );
+      }
+      for (const p of uiConfig.value.policies) {
+        if (Array.isArray(p.order)) {
+          p.order = p.order.map((key) => renameMap.get(key) ?? key);
+        }
+      }
+    }
+    markDirty();
+  }
+
+  function addMirrorHost() {
+    let base = "back";
+    let name = base;
+    let counter = uiConfig.value.mirrors.length + 1;
+    while (uiConfig.value.mirrors.some((m) => m.name === name)) {
+      name = `${base}${counter++}`;
+    }
+    uiConfig.value.mirrors.push({
+      _uid: generateUid("mirror"),
+      name,
+      host: "",
+      secret: "",
+      enabled: true,
+    });
+    markDirty();
+    showToast(`已添加备用主机【${name}】`, "success");
+  }
+
+  function removeMirrorHost(index: number) {
+    const target = uiConfig.value.mirrors[index];
+    if (!target) return;
+    if (confirm(`确定要移除备用主机【${target.name || "未命名"}】吗？`)) {
+      uiConfig.value.mirrors.splice(index, 1);
+      pruneStaleEndpointRefs();
+      markDirty();
+      showToast(`已移除备用主机【${target.name || "未命名"}】`, "info");
+    }
   }
 
   function renamePolicy(policy: UIPolicy, newName: string) {
@@ -319,12 +418,7 @@ export const useStore = defineStore("core", () => {
     if (!target) return;
     if (confirm(`确定要彻底删除节点组【${target.name}】吗？`)) {
       uiConfig.value.endpoints.splice(index, 1);
-      // 清除各策略引用
-      for (const p of uiConfig.value.policies) {
-        if (Array.isArray(p.order)) {
-          p.order = p.order.filter((k) => k !== `endpoint:${target.name}`);
-        }
-      }
+      pruneStaleEndpointRefs();
       markDirty();
       showToast(`已删除节点组【${target.name}】`, "info");
     }
@@ -425,6 +519,7 @@ export const useStore = defineStore("core", () => {
     errorMessage,
     activeTab,
     uiConfig,
+    allEndpointOptions,
     availableTargets,
     profileUrl,
     toastMessage,
@@ -442,6 +537,10 @@ export const useStore = defineStore("core", () => {
     toggleAllPolicies,
     toggleAllFilters,
     renameEndpointGroup,
+    changeEndpointKind,
+    renameMirrorHost,
+    addMirrorHost,
+    removeMirrorHost,
     renamePolicy,
     addEndpointGroup,
     removeEndpointGroup,

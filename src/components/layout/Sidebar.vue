@@ -36,6 +36,12 @@ onUnmounted(() => {
 
 const navItems = [
   {
+    id: "hosts",
+    label: "主机组",
+    icon: "i-mdi-lan-connect",
+    countKey: "mirrors",
+  },
+  {
     id: "endpoints",
     label: "节点组",
     icon: "i-mdi-server-network",
@@ -68,7 +74,7 @@ const navItems = [
 ] as const;
 
 function getItemCount(
-  key: "endpoints" | "policies" | "filters" | "fallback" | null,
+  key: "mirrors" | "endpoints" | "policies" | "filters" | "fallback" | null,
 ): string | number | null {
   if (!key) return null;
   if (key === "fallback") {

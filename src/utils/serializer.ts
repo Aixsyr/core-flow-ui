@@ -7,9 +7,12 @@ import type {
   UIEndpointGroup,
   UIPolicy,
   UIFilter,
+  UIMirrorHost,
+  MirrorHost,
   EndpointItem,
   FallbackConfig,
 } from "@/types/config";
+import { normalizeMirrorHost } from "./derived";
 import { formatNodesText, parseNodesText } from "./extractor";
 
 let uidCounter = 0;
@@ -77,8 +80,17 @@ export function fromBackendSettings(raw: Settings): UISettings {
         hosts: [],
       };
 
+  const mirrors: UIMirrorHost[] = (raw.mirrors || []).map((mirror) => ({
+    _uid: generateUid("mirror"),
+    name: mirror.name || "",
+    host: mirror.host || "",
+    secret: mirror.secret || "",
+    enabled: typeof mirror.enabled === "boolean" ? mirror.enabled : true,
+  }));
+
   return {
     defaultTarget: raw.defaultTarget || "DIRECT",
+    mirrors,
     fallback,
     endpoints,
     policies,
@@ -180,8 +192,16 @@ export function toBackendSettings(ui: UISettings): Settings {
     hosts: (ui.fallback?.hosts || []).map((h) => h.trim()).filter(Boolean),
   };
 
+  const mirrors: MirrorHost[] = ui.mirrors.map((mirror) => ({
+    name: mirror.name.trim(),
+    host: normalizeMirrorHost(mirror.host || ""),
+    secret: (mirror.secret || "").trim(),
+    enabled: Boolean(mirror.enabled),
+  }));
+
   const result: Settings = {
     defaultTarget: ui.defaultTarget.trim() || "DIRECT",
+    mirrors,
     fallback,
     endpoints,
     policies,

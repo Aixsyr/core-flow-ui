@@ -3,6 +3,7 @@ import { ref, onMounted } from "vue";
 import { useStore } from "@/store";
 import Sidebar from "@/components/layout/Sidebar.vue";
 import ConnectionModal from "@/components/layout/ConnectionModal.vue";
+import HostsTab from "@/components/hosts/HostsTab.vue";
 import EndpointsTab from "@/components/endpoints/EndpointsTab.vue";
 import PoliciesTab from "@/components/policies/PoliciesTab.vue";
 import FiltersTab from "@/components/filters/FiltersTab.vue";
@@ -31,6 +32,9 @@ onMounted(async () => {
 
     <!-- 右侧主工作区 (独立垂直滚动) -->
     <div class="flex-1 min-w-0 h-screen overflow-y-auto">
+      <!-- Tab 0: 主机组管理 -->
+      <HostsTab v-show="store.activeTab === 'hosts'" />
+
       <!-- Tab 1: 节点组管理 -->
       <EndpointsTab v-show="store.activeTab === 'endpoints'" />
 

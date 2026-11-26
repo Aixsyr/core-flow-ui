@@ -54,8 +54,16 @@ export interface FallbackConfig {
   hosts: string[];
 }
 
+export interface MirrorHost {
+  name: string;
+  host: string;
+  secret: string;
+  enabled: boolean;
+}
+
 export interface Settings {
   defaultTarget: string;
+  mirrors: MirrorHost[];
   fallback: FallbackConfig;
   endpoints: EndpointGroup[];
   policies: Policy[];
@@ -104,8 +112,17 @@ export interface UIFilter {
   viewMode?: "list" | "code";
 }
 
+export interface UIMirrorHost {
+  _uid: string;
+  name: string;
+  host: string;
+  secret: string;
+  enabled: boolean;
+}
+
 export interface UISettings {
   defaultTarget: string;
+  mirrors: UIMirrorHost[];
   fallback: FallbackConfig;
   endpoints: UIEndpointGroup[];
   policies: UIPolicy[];

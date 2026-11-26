@@ -98,14 +98,8 @@ function handleScroll() {
 }
 
 function handleKindChange(kind: EndpointKind) {
-  props.group.kind = kind;
-  if (kind === "edge") {
-    props.group.parent = "";
-  } else if (!props.group.parent) {
-    props.group.parent = store.uiConfig.policies[0]?.name || "";
-  }
+  store.changeEndpointKind(props.group, kind);
   validateSemicolons();
-  store.markDirty();
 }
 
 function toggleExpand() {

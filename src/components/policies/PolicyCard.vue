@@ -2,7 +2,6 @@
 import { computed } from "vue";
 import { useStore } from "@/store";
 import type { UIPolicy } from "@/types/config";
-import { parseNodesText } from "@/utils/extractor";
 import BaseCard from "@/components/layout/BaseCard.vue";
 
 const props = defineProps<{
@@ -22,6 +21,8 @@ export interface CandidateOption {
   type: "direct" | "reject" | "endpoint" | "policy";
   label: string;
   count?: number;
+  isDerived?: boolean;
+  disabled?: boolean;
   active: boolean;
 }
 
@@ -44,16 +45,19 @@ const candidateCards = computed<CandidateOption[]>(() => {
     active: activeKeys.has("reject"),
   });
 
-  // 2. 节点组 (按组名)
-  for (const ep of store.uiConfig.endpoints) {
-    if (!ep.name) continue;
+  // 2. 统一节点组清单（原始节点组 + 由 edge 组与 mirrors 派生的镜像组）
+  for (const ep of store.allEndpointOptions) {
     const key = `endpoint:${ep.name}`;
+    const isActive = activeKeys.has(key);
+    if (ep.isDerived && !ep.enabled && !isActive) continue;
     allMap.set(key, {
       key,
       type: "endpoint",
       label: ep.name,
-      count: parseNodesText(ep.rawText || "", ep.kind, ep.name).length,
-      active: activeKeys.has(key),
+      count: ep.count,
+      isDerived: ep.isDerived,
+      disabled: ep.isDerived && !ep.enabled,
+      active: isActive,
     });
   }
 
@@ -108,16 +112,22 @@ function moveCandidate(cKey: string, delta: number) {
   store.markDirty();
 }
 
-// 全选/取消全选节点组
+// 全选/取消全选节点组（统一使用包含启用派生组在内的可用节点组清单）
+const selectableEndpointKeys = computed(() =>
+  store.allEndpointOptions
+    .filter((ep) => !ep.isDerived || ep.enabled)
+    .map((ep) => `endpoint:${ep.name}`),
+);
+
 const isAllEndpointsSelected = computed(() => {
-  const epKeys = store.uiConfig.endpoints.map((e) => `endpoint:${e.name}`);
+  const epKeys = selectableEndpointKeys.value;
   if (epKeys.length === 0) return false;
   const current = new Set(props.policy.order || []);
   return epKeys.every((k) => current.has(k));
 });
 
 function toggleAllEndpoints() {
-  const epKeys = store.uiConfig.endpoints.map((e) => `endpoint:${e.name}`);
+  const epKeys = selectableEndpointKeys.value;
   if (isAllEndpointsSelected.value) {
     props.policy.order = (props.policy.order || []).filter(
       (k) => !k.startsWith("endpoint:"),
@@ -276,6 +286,18 @@ function movePolicy(delta: number) {
 
         <!-- 名称 -->
         <span class="font-bold tracking-tight">{{ card.label }}</span>
+
+        <!-- 派生标记 -->
+        <span
+          v-if="card.isDerived"
+          class="px-1 py-0.2 rounded text-[10px] font-semibold"
+          :class="
+            card.disabled
+              ? 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+              : 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+          ">
+          {{ card.disabled ? "已停用" : "派生" }}
+        </span>
 
         <!-- 节点数量标记 (仅静态节点组拥有) -->
         <span

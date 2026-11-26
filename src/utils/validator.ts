@@ -1,4 +1,5 @@
 import type { UISettings } from "@/types/config";
+import { getAllEndpointOptions, normalizeMirrorHost } from "./derived";
 
 export interface ValidationResult {
   valid: boolean;
@@ -13,7 +14,34 @@ export function validateSettings(ui: UISettings): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // 1. 节点组校验
+  // 1. 主机组 (mirrors) 校验
+  const mirrorNames = new Set<string>();
+  for (const mirror of ui.mirrors) {
+    const name = mirror.name.trim();
+    if (!name) {
+      errors.push("存在未命名的备用主机");
+      continue;
+    }
+    if (/[,;\r\n]/.test(name)) {
+      errors.push(`备用主机别名不能包含逗号、分号或换行: 【${name}】`);
+    }
+    if (mirrorNames.has(name)) {
+      errors.push(`备用主机别名重复: 【${name}】`);
+    }
+    mirrorNames.add(name);
+
+    const host = normalizeMirrorHost(mirror.host || "");
+    if (!host) {
+      errors.push(`备用主机【${name}】域名不能为空`);
+    } else if (/[,;\s/]/.test(host)) {
+      errors.push(`备用主机【${name}】域名格式非法（仅填写域名，勿含路径）: ${host}`);
+    }
+    if (!mirror.secret?.trim()) {
+      errors.push(`备用主机【${name}】连接密钥不能为空`);
+    }
+  }
+
+  // 2. 节点组校验（含派生组名冲突检测）
   const groupNames = new Set<string>();
   for (const group of ui.endpoints) {
     const name = group.name.trim();
@@ -31,7 +59,16 @@ export function validateSettings(ui: UISettings): ValidationResult {
     }
   }
 
-  // 2. 策略组校验
+  const allEndpointNames = new Set<string>(groupNames);
+  for (const opt of getAllEndpointOptions(ui.endpoints, ui.mirrors)) {
+    if (!opt.isDerived) continue;
+    if (allEndpointNames.has(opt.name)) {
+      errors.push(`派生节点组名称冲突: 【${opt.name}】`);
+    }
+    allEndpointNames.add(opt.name);
+  }
+
+  // 3. 策略组校验
   const policyNames = new Set<string>();
   const policyMap = new Map<string, string[]>();
 
@@ -44,6 +81,9 @@ export function validateSettings(ui: UISettings): ValidationResult {
     if (policyNames.has(name)) {
       errors.push(`策略组名称重复: 【${name}】`);
     }
+    if (allEndpointNames.has(name)) {
+      errors.push(`策略组名称与节点组（或派生组）冲突: 【${name}】`);
+    }
     policyNames.add(name);
 
     const subPolicies: string[] = [];
@@ -52,7 +92,7 @@ export function validateSettings(ui: UISettings): ValidationResult {
         subPolicies.push(key.slice("policy:".length));
       } else if (key.startsWith("endpoint:")) {
         const targetGroup = key.slice("endpoint:".length);
-        if (!groupNames.has(targetGroup)) {
+        if (!allEndpointNames.has(targetGroup)) {
           warnings.push(`策略【${name}】引用了不存在的节点组: ${targetGroup}`);
         }
       }
